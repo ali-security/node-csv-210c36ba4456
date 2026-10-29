@@ -1,0 +1,66 @@
+# Build, test and pack csv-parse (packages/csv-parse) on the ali-security fork.
+# Upstream ships no GitHub Actions CI; this mirrors the package's own
+# `npm run build` (babel + browserify) and mocha test script, on the Node
+# versions of its .travis.yml that the release-era devDependencies support
+# (mocha 9 / ts-node 10 require Node >= 12).
+name: seal-build
+
+on:
+  workflow_dispatch:
+    inputs:
+      test-filter:
+        description: "Mocha spec file(s) to run instead of the full suite (empty = full suite)"
+        required: false
+        default: ""
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["14", "12"]
+    defaults:
+      run:
+        working-directory: packages/csv-parse
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      # Pinned to the end of the 2021-09-03 lerna release batch: the workspace
+      # devDeps csv-generate 3.4.3 and stream-transform 2.1.3 were published
+      # ~0.2s after csv-parse 4.16.3 (upstream links them via yarn workspaces).
+      - name: Registry time machine (2021-09-03 release batch)
+        run: |
+          npm config set registry https://time-machines-npm.sealsecurity.io/
+          npm config set //time-machines-npm.sealsecurity.io/:_authToken=2021-09-03T08:25:30.000Z
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Build
+        run: npm run build
+      - name: Test
+        run: |
+          node --version
+          if [ -n "${{ inputs.test-filter }}" ]; then
+            TS_NODE_COMPILER_OPTIONS='{"strictNullChecks":true}' npx mocha ${{ inputs.test-filter }}
+          else
+            TS_NODE_COMPILER_OPTIONS='{"strictNullChecks":true}' npx mocha 'test/**/*.{coffee,ts}'
+          fi
+      - name: Pack
+        if: matrix.node == '14'
+        run: |
+          # lerna publish copies the root LICENSE into packages that lack one
+          cp ../../LICENSE LICENSE
+          mkdir -p ../../seal-dist
+          # lerna 4 packs with npm-packlist 2 (npm 7 rules), which no longer
+          # auto-includes CHANGELOG.md; Node 14's bundled npm 6 would add it
+          npx -p npm@7 npm pack
+          mv csv-parse-4.16.3.tgz ../../seal-dist/
+      - uses: actions/upload-artifact@v4
+        if: matrix.node == '14'
+        with:
+          name: csv-parse-tgz
+          path: seal-dist/csv-parse-4.16.3.tgz
+          if-no-files-found: error
