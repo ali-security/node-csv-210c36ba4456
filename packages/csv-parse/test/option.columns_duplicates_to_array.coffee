@@ -49,3 +49,12 @@ describe 'Option `columns_duplicates_to_array`', ->
         'FIELD_1': ['GHI', 'JKL']
       ] unless err
       next err
+
+  it 'inherited property names are not duplicates', (next) ->
+    parse """
+    toString,constructor,role
+    a,b,admin
+    """, columns: true, columns_duplicates_to_array: true, (err, records) ->
+      return next err if err
+      JSON.stringify(records).should.eql '[{"toString":"a","constructor":"b","role":"admin"}]' # was `[{"toString":[null,"a"],"constructor":[null,"b"],"role":"admin"}]`
+      next()

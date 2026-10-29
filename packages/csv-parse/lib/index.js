@@ -825,14 +825,19 @@ class Parser extends Transform {
         for(let i = 0, l = record.length; i < l; i++){
           if(columns[i] === undefined || columns[i].disabled) continue
           // Turn duplicate columns into an array
-          if (columns_duplicates_to_array === true && obj[columns[i].name] !== undefined) {
+          if (columns_duplicates_to_array === true && Object.prototype.hasOwnProperty.call(obj, columns[i].name)) {
             if (Array.isArray(obj[columns[i].name])) {
               obj[columns[i].name] = obj[columns[i].name].concat(record[i])
             } else {
               obj[columns[i].name] = [obj[columns[i].name], record[i]]
             }
           } else {
-            obj[columns[i].name] = record[i]
+            Object.defineProperty(obj, columns[i].name, {
+              value: record[i],
+              enumerable: true,
+              writable: true,
+              configurable: true,
+            })
           }
         }
         const {objname} = this.options

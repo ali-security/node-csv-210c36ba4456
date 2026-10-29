@@ -329,3 +329,31 @@ describe 'Option `columns`', ->
           code: 'CSV_INVALID_COLUMN_MAPPING'
           headers: FIELD: true
         next()
+
+  it 'prototype replacement still reachable via columns path (#496)', (next) ->
+    parse """
+    __proto__,__proto__,role
+    EVIL1,EVIL2,admin
+    """, columns: true, columns_duplicates_to_array: true, (err, records) ->
+      return next err if err
+      rec = records[0]
+      JSON.stringify(rec).should.eql '{"__proto__":["EVIL1","EVIL2"],"role":"admin"}' # was equals to `{"role":"admin"}`
+      should(rec.length).be.Undefined() # was equals to `3`
+      should(rec['1']).be.Undefined() # was equal to `EVIL1`
+      should(rec['2']).be.Undefined() # was equal to `EVIL2`
+      should(rec['role']).eql 'admin' # was equal to `admin`
+      next()
+
+  it 'prototype replacement not reachable with a casted `__proto__` field', (next) ->
+    parse """
+    __proto__,role
+    2020-01-01,admin
+    """, columns: true, cast: true, cast_date: true, (err, records) ->
+      return next err if err
+      rec = records[0]
+      (Object.getPrototypeOf(rec) is Object.prototype).should.be.true() # was a `Date` instance
+      Object.prototype.hasOwnProperty.call(rec, '__proto__').should.be.true()
+      rec['__proto__'].should.be.an.instanceOf Date
+      should(rec.getTime).be.Undefined() # was inherited from `Date.prototype`
+      should(rec['role']).eql 'admin'
+      next()
